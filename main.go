@@ -3,13 +3,14 @@ package main
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/jason"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -48,11 +49,11 @@ func main() {
 	go func() {
 		t := time.Now()
 		genisisBlock := Block{}
-		genisisBlock := Block{0, t.String(), 0, calculateHash(genisisBlock), "", difficulty, ""}
+		genisisBlock = Block{0, t.String(), 0, calculateHash(genisisBlock), "", difficulty, ""}
 		spew.Dump(genisisBlock)
 
 		mutex.Lock()
-		Blockchain = append(Blockchain, genesisBlock)
+		Blockchain = append(Blockchain, genisisBlock)
 		mutex.Unlock()
 	}()
 	log.Fatal(run())
@@ -91,7 +92,7 @@ func makeMuxRouter() http.Handler {
 func handleGetBlockchain(w http.ResponseWriter, r *http.Request) {
 	bytes, err := jason.MarshalIndent(Blockchain, "", "  ")
 	if err != nil {
-		http.Error(w, err, Error(), http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	io.WriteString(w, string(bytes))
@@ -123,6 +124,18 @@ func handleWriteBlock(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func respondWithJSON(w http.ResponseWriter, r *http.Request, code int, payload interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	response, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("HTTP 500: Internal Server Error"))
+		return
+	}
+	w.WriteHeader(code)
+	w.Write(response)
+}
+
 // make sure block is valid by checking index, and comparing the hash of the previous block
 func isBlockValid(newBlock, oldBlock Block) bool {
 	if oldBlock.Index+1 != newBlock.Index {
@@ -147,4 +160,37 @@ func calculateHash(block Block) string {
 	h.Write([]byte(record))
 	hashed := h.Sum(nil)
 	return hex.EncodeToString(hashed)
+}
+
+//Creating a new block using prew blocks hash
+func generateBlock(oldBlock Block, BPM int) Block {
+	var newBlock Block
+
+	t := time.Now()
+
+	newBlock.Index = oldBlock.Index
+	newBlock.Timestamp = t.String()
+	newBlock.BPM = BPM
+	newBlock.PrevHash = oldBlock.Hash
+	newBlock.Difficulty = difficulty
+
+	for i := 0; ; i++ {
+		hex := fmt.Sprintf("%x", i)
+		newBlock.Nonce = hex
+		if !isHashValid(calculateHash(newBlock), newBlock.Difficulty) {
+			fmt.Println(calculateHash(newBlock), " do more work!")
+			time.Sleep(time.Second)
+			continue
+		} else {
+			fmt.Println(calculateHash(newBlock), " work done!")
+			newBlock.Hash = calculateHash(newBlock)
+			break
+		}
+
+	}
+	return newBlock
+}
+func isHashValid(hash string, difficulty int) bool {
+	prefix := strings.Repeat("0", difficulty)
+	return strings.HasPrefix(hash, prefix)
 }
