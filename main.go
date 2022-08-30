@@ -32,8 +32,10 @@ type Block struct {
 	Nonce      string
 }
 
+// Blockchain is a series of validated Blocks
 var Blockchain []Block
 
+// Message takes incoming JSON payload for writing heart rate
 type Message struct {
 	BPM int
 }
@@ -43,17 +45,17 @@ var mutex = &sync.Mutex{}
 func main() {
 	err := godotenv.Load()
 	if err != nil {
-		log.fatal(err)
+		log.Fatal(err)
 	}
 
 	go func() {
 		t := time.Now()
-		genisisBlock := Block{}
-		genisisBlock = Block{0, t.String(), 0, calculateHash(genisisBlock), "", difficulty, ""}
-		spew.Dump(genisisBlock)
+		genesisBlock := Block{}
+		genesisBlock = Block{0, t.String(), 0, calculateHash(genesisBlock), "", difficulty, ""}
+		spew.Dump(genesisBlock)
 
 		mutex.Lock()
-		Blockchain = append(Blockchain, genisisBlock)
+		Blockchain = append(Blockchain, genesisBlock)
 		mutex.Unlock()
 	}()
 	log.Fatal(run())
@@ -63,8 +65,8 @@ func main() {
 // web server
 func run() error {
 	mux := makeMuxRouter()
-	httpPort := os.Getenv("PORT")
-	log.Println("HTTP Server Listening on port :", httpPort)
+	httpPort := os.Getenv("8080")
+	log.Println("HTTP Server Listening on port :8080", httpPort)
 	s := &http.Server{
 		Addr:           ":" + httpPort,
 		Handler:        mux,
@@ -80,7 +82,7 @@ func run() error {
 	return nil
 }
 
-//create handler
+// create handlers
 func makeMuxRouter() http.Handler {
 	muxRouter := mux.NewRouter()
 	muxRouter.HandleFunc("/", handleGetBlockchain).Methods("GET")
@@ -88,9 +90,9 @@ func makeMuxRouter() http.Handler {
 	return muxRouter
 }
 
-//write blockchain when recive an http recquest
+// write blockchain when we receive an http request
 func handleGetBlockchain(w http.ResponseWriter, r *http.Request) {
-	bytes, err := jason.MarshalIndent(Blockchain, "", "  ")
+	bytes, err := json.MarshalIndent(Blockchain, "", "  ")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -98,7 +100,7 @@ func handleGetBlockchain(w http.ResponseWriter, r *http.Request) {
 	io.WriteString(w, string(bytes))
 }
 
-//take jason payload as an inpuit bpm
+// takes JSON payload as an input for heart rate (BPM)
 func handleWriteBlock(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var m Message
@@ -162,13 +164,13 @@ func calculateHash(block Block) string {
 	return hex.EncodeToString(hashed)
 }
 
-//Creating a new block using prew blocks hash
+// create a new block using previous block's hash
 func generateBlock(oldBlock Block, BPM int) Block {
 	var newBlock Block
 
 	t := time.Now()
 
-	newBlock.Index = oldBlock.Index
+	newBlock.Index = oldBlock.Index + 1
 	newBlock.Timestamp = t.String()
 	newBlock.BPM = BPM
 	newBlock.PrevHash = oldBlock.Hash
